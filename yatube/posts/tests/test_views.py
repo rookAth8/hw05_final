@@ -1,5 +1,3 @@
-from http import HTTPStatus
-
 from django import forms
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -88,7 +86,7 @@ class PostPagesTests(TestCase):
         """Проверка корректного контекста у страницы поста"""
         response = self.authorized_client.get(
             reverse(
-                'posts:post_detail', kwargs={'post_id': '1'}
+                'posts:post_detail', kwargs={'post_id': self.post.id}
             )
         )
         self.check_post(response.context['post'])
@@ -135,13 +133,14 @@ class PaginatorViewsTest(TestCase):
             slug='test-slug',
             description='Тестовое описание',
         )
-        cls.posts = [
-            Post.objects.create(
-                text=f'Тестовый пост {i}',
-                author=cls.user,
-                group=cls.group
-            ) for i in range(13)
-        ]
+        Post.objects.bulk_create(
+            [
+                Post(
+                    text=f'Тестовый пост {i}',
+                    author=cls.user,
+                    group=cls.group) for i in range(13)
+            ]
+        )
 
     def setUp(self):
         self.guest_client = Client()
@@ -164,26 +163,30 @@ class PaginatorViewsTest(TestCase):
 
 
 class FollowTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username='follower')
+        cls.author = User.objects.create_user(username='following')
+        cls.post = Post.objects.create(
+            author=cls.author,
+            text='Текст'
+        )
+        cls.post_follow = Follow.objects.create(
+            user=cls.user, author=cls.author
+        )
+
     def setUp(self):
         self.user_follower = Client()
         self.author_following = Client()
-
-        self.user_new = User.objects.create_user(username='follower')
-        self.author_new = User.objects.create_user(username='following')
-
-        self.user_follower.force_login(self.user_new)
-        self.author_following.force_login(self.author_new)
-
-        self.post = Post.objects.create(
-            author=self.author_new,
-            text='Текст'
-        )
+        self.user_follower.force_login(self.user)
+        self.author_following.force_login(self.author)
 
     def test_user_follow_author(self):
         """Пользователь может подписаться на автора поста"""
         self.user_follower.get(
             reverse('posts:profile_follow', kwargs={
-                'username': self.author_new.username})
+                'username': self.author.username})
         )
         self.assertEqual(Follow.objects.all().count(), 1)
 
@@ -191,29 +194,15 @@ class FollowTests(TestCase):
         """Пользователь может отписаться от автора поста"""
         self.user_follower.get(
             reverse('posts:profile_unfollow', kwargs={
-                'username': self.author_new.username})
+                'username': self.author.username})
         )
         self.assertEqual(Follow.objects.all().count(), 0)
 
     def test_following_authors_posts_on_follow_page(self):
         """Новая запись автора появляется в ленте у подписчика"""
-        Follow.objects.create(user=self.user_new,
-                              author=self.author_new)
-        response = self.user_follower.get('/follow/')
-        post_text = response.context["page_obj"][0].text
-        self.assertEqual(post_text, self.post.text)
-
-    def test_authorized_client_add_comment(self):
-        """Проверка добавления комментария"""
-        response = self.author_following.post(
-            f'/posts/{self.post.id}/comment/', {
-                'text': 'Текст'
-            },
-            follow=True
-        )
-        self.assertEqual(response.status_code, HTTPStatus.OK)
-        response = self.author_following.get(f'/posts/{self.post.id}/')
-        self.assertContains(response, 'Текст')
+        response = self.user_follower.get(reverse('posts:index'))
+        post_text = response.context['page_obj'][0]
+        self.assertEqual(post_text, self.post)
 
 
 class CacheTests(TestCase):

@@ -3,7 +3,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.models import Group, Post
+from posts.models import Comment, Group, Post
 
 User = get_user_model()
 
@@ -110,3 +110,36 @@ class PostFormTests(TestCase):
         )
         self.assertEqual(
             Post.objects.count(), Post.objects.count())
+
+
+class CommentFormTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username='user')
+        cls.post = Post.objects.create(
+            author=cls.user,
+            text='Текст'
+        )
+
+    def setUp(self):
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+
+    def test_add_comment(self):
+        """Проверка добавления комментария"""
+        form_data = {
+            'text': 'Тестовый комментарий'
+        }
+        self.authorized_client.post(
+            reverse(
+                'posts:add_comment', kwargs={'post_id': self.post.id},
+            ),
+            data=form_data,
+            follow=True
+        )
+        self.assertTrue(
+            Comment.objects.filter(
+                text='Тестовый комментарий',
+                author=self.user
+            ).exists())

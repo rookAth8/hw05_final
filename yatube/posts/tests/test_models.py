@@ -18,7 +18,7 @@ class PostModelTest(TestCase):
         cls.group = Group.objects.create(
             title='Тестовый заголовок',
             slug='test-slug',
-            description='Тестовое описание',
+            description='Тестовое описание'
         )
 
     def test_models_correct_object_names(self):
@@ -32,7 +32,8 @@ class PostModelTest(TestCase):
         """Проверка verbose_name"""
         post_field_verboses = {
             'author': 'Автор',
-            'group': 'Группа'
+            'group': 'Группа',
+            'image': 'Картинка'
         }
         group_field_verboses = {
             'title': 'Название',
